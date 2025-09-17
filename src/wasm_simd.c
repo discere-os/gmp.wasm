@@ -106,35 +106,48 @@ int gmp_simd_is_zero(const void* ptr, size_t len) {
 /**
  * SIMD-optimized limb addition with carry propagation
  * Core operation for multi-precision addition
+ *
+ * Note: Proper SIMD carry propagation is complex due to the sequential
+ * nature of carries. This implementation uses a hybrid approach:
+ * SIMD for the addition operations, scalar for carry propagation.
  */
 EMSCRIPTEN_KEEPALIVE
 uint32_t gmp_simd_add_limbs(uint32_t* result, const uint32_t* a, const uint32_t* b, size_t len) {
     uint32_t carry = 0;
 
-    // Process 4 limbs (16 bytes) at a time
-    size_t simd_len = len & ~3;
-    for (size_t i = 0; i < simd_len; i += 4) {
-        // Load 4 limbs each
-        v128_t va = wasm_v128_load(&a[i]);
-        v128_t vb = wasm_v128_load(&b[i]);
-        v128_t vcarry = wasm_i32x4_splat(carry);
+    // For very large arrays, use SIMD for bulk addition without carries,
+    // then handle carry propagation in a second pass
+    if (len >= 16) {
+        // First pass: SIMD addition without carry propagation
+        size_t simd_len = len & ~3;
+        for (size_t i = 0; i < simd_len; i += 4) {
+            v128_t va = wasm_v128_load(&a[i]);
+            v128_t vb = wasm_v128_load(&b[i]);
+            v128_t sum = wasm_i32x4_add(va, vb);
+            wasm_v128_store(&result[i], sum);
+        }
 
-        // Add with carry
-        v128_t sum1 = wasm_i32x4_add(va, vb);
-        v128_t sum2 = wasm_i32x4_add(sum1, vcarry);
+        // Second pass: Sequential carry propagation
+        for (size_t i = 0; i < simd_len; i++) {
+            uint64_t sum = (uint64_t)result[i] + carry;
+            result[i] = (uint32_t)sum;
+            carry = (uint32_t)(sum >> 32);
+        }
 
-        wasm_v128_store(&result[i], sum2);
-
-        // Calculate carry for next iteration
-        // This is simplified - real implementation needs proper carry propagation
-        carry = 0;  // TODO: Implement proper SIMD carry detection
-    }
-
-    // Handle remainder with scalar code
-    for (size_t i = simd_len; i < len; i++) {
-        uint64_t sum = (uint64_t)a[i] + (uint64_t)b[i] + carry;
-        result[i] = (uint32_t)sum;
-        carry = (uint32_t)(sum >> 32);
+        // Handle remainder with scalar addition and carry
+        for (size_t i = simd_len; i < len; i++) {
+            uint64_t sum = (uint64_t)a[i] + (uint64_t)b[i] + carry;
+            result[i] = (uint32_t)sum;
+            carry = (uint32_t)(sum >> 32);
+        }
+    } else {
+        // For smaller arrays, use pure scalar implementation
+        // (SIMD overhead not worth it for small sizes)
+        for (size_t i = 0; i < len; i++) {
+            uint64_t sum = (uint64_t)a[i] + (uint64_t)b[i] + carry;
+            result[i] = (uint32_t)sum;
+            carry = (uint32_t)(sum >> 32);
+        }
     }
 
     return carry;
