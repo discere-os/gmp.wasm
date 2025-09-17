@@ -1,0 +1,143 @@
+# WebAssembly Build Artifacts
+*.wasm
+*.js.mem
+*.wat
+*.wast
+
+# Build Directories
+build/
+build-*/
+install/
+dist/
+npm/
+node_modules/
+
+# Emscripten Generated Files
+*.bc
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# JavaScript/TypeScript Build Outputs
+*.js
+*.js.map
+*.d.ts
+!src/**/*.ts
+!tests/**/*.ts
+!bench/**/*.ts
+!demo-*.ts
+!_build_npm.ts
+
+# Deno
+deno.lock
+.deno/
+
+# Node.js (for NPM compatibility)
+package-lock.json
+yarn.lock
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Operating System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and Debug Files
+*.log
+debug.log
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime and Cache
+.cache/
+.temp/
+.tmp/
+*.tmp
+
+# Coverage and Test Reports
+coverage/
+.nyc_output/
+*.lcov
+*.gcov
+*.gcda
+*.gcno
+
+# Environment Files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Backup Files
+*.bak
+*.backup
+*.orig
+
+# Compressed Files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Documentation Build (if using docs generators)
+docs/build/
+site/
+
+# Profiling and Benchmarking
+*.prof
+benchmark-results/
+perf-data/
+
+# Emscripten Cache (if local)
+.emscripten_cache/
+.emscripten_ports/
+
+# WebAssembly Debug Info
+*.dwarf
+*.debug
+
+# Test Generated Files
+test-results/
+test-artifacts/
+
+# NPM Package Build
+npm-package/
+package/
+
+# Debug and Test Scripts (keep demo scripts)
+debug-*.ts
+test-*.ts
+!tests/
+!bench/
+
+# Temporary WebAssembly Files
+*.tmp.wasm
+*.debug.wasm
+
+# LLVM/Clang Intermediate Files
+*.ll
+*.s
+
+# Source Maps
+*.map
+
+# Lock Files (optional - uncomment if you don't want to commit lock files)
+# deno.lock
+# package-lock.json
