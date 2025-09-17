@@ -1,0 +1,122 @@
+name: Sync Upstream GMP
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allow manual triggering
+
+jobs:
+  sync-upstream:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Git config
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install Mercurial
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mercurial
+
+      - name: Install hg-fast-export
+        run: |
+          git clone https://github.com/frej/fast-export.git /tmp/fast-export
+          chmod +x /tmp/fast-export/hg-fast-export.sh
+
+      - name: Clone upstream GMP mercurial repository
+        run: |
+          # Remove any existing upstream directory
+          rm -rf gmp-upstream
+          # Clone upstream GMP repository
+          hg clone https://gmplib.org/repo/gmp/ gmp-upstream
+
+      - name: Check for upstream changes
+        id: check-changes
+        run: |
+          # Get current master branch head
+          CURRENT_HEAD=$(git rev-parse master 2>/dev/null || echo "")
+          echo "Current HEAD: $CURRENT_HEAD"
+
+          # Create a temporary directory for conversion test
+          mkdir -p /tmp/conversion-test
+          cd /tmp/conversion-test
+          git init
+
+          # Convert mercurial to git to check latest commit
+          /tmp/fast-export/hg-fast-export.sh -r $GITHUB_WORKSPACE/gmp-upstream > /dev/null 2>&1
+
+          # Get the latest commit from conversion
+          UPSTREAM_HEAD=$(git rev-parse master 2>/dev/null || echo "")
+          echo "Upstream HEAD: $UPSTREAM_HEAD"
+
+          # Compare commits
+          if [ "$CURRENT_HEAD" != "$UPSTREAM_HEAD" ] && [ -n "$UPSTREAM_HEAD" ]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+            echo "upstream_head=$UPSTREAM_HEAD" >> $GITHUB_OUTPUT
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+          fi
+
+          cd $GITHUB_WORKSPACE
+          rm -rf /tmp/conversion-test
+
+      - name: Update master branch with upstream changes
+        if: steps.check-changes.outputs.changes == 'true'
+        run: |
+          # Switch to master branch
+          git checkout master
+
+          # Create a backup branch
+          git branch master-backup-$(date +%Y%m%d-%H%M%S)
+
+          # Clear the current repository content (except .git and .github)
+          find . -mindepth 1 -maxdepth 1 -name ".git" -prune -o -name ".github" -prune -o -print0 | xargs -0 rm -rf
+
+          # Convert and import upstream changes
+          /tmp/fast-export/hg-fast-export.sh -r gmp-upstream
+
+          echo "Updated master branch with latest upstream changes"
+
+      - name: Push updated master branch
+        if: steps.check-changes.outputs.changes == 'true'
+        run: |
+          git push origin master
+          echo "Pushed updated master branch to GitHub"
+
+      - name: Notify about wasm branch update needed
+        if: steps.check-changes.outputs.changes == 'true'
+        run: |
+          echo "::notice::Master branch updated with upstream changes. Manual rebase of wasm branch may be needed."
+
+      - name: Create summary comment
+        if: steps.check-changes.outputs.changes == 'true'
+        run: |
+          echo "## Upstream Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Successfully synced with upstream GMP repository" >> $GITHUB_STEP_SUMMARY
+          echo "- Updated master branch with latest changes" >> $GITHUB_STEP_SUMMARY
+          echo "- Upstream HEAD: \`${{ steps.check-changes.outputs.upstream_head }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Action Required**: Manual rebase of wasm branch on updated master" >> $GITHUB_STEP_SUMMARY
+          echo "- Sync completed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+      - name: No changes detected
+        if: steps.check-changes.outputs.changes == 'false'
+        run: |
+          echo "## Upstream Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ No new changes detected in upstream repository" >> $GITHUB_STEP_SUMMARY
+          echo "- Last checked: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf gmp-upstream
+          rm -rf /tmp/fast-export
